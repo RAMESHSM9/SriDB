@@ -169,3 +169,61 @@ TEST_F(PageTest, UpdateInvalidSlot) {
   bool success = page.updateRecord(0, (char *)&user, sizeof(User));
   EXPECT_FALSE(success);
 }
+
+// Delete the record
+/*TEST_F(PageTest, DeleteRecord) {
+  User user = {1, "Alice", 25};
+
+  ASSERT_TRUE(page.insertRecord(reinterpret_cast<char *>(&user), sizeof(user)));
+
+  EXPECT_EQ(1, page.getNumberOfRecords());
+
+  // slot is 0 based indexing
+  ASSERT_TRUE(page.deleteRecord(0));
+
+  EXPECT_EQ(0, page.getNumberOfRecords());
+}*/
+
+TEST_F(PageTest, DeleteRecord) {
+  // Insert 3 records
+  User user1 = {1, "Alice", 25};
+  User user2 = {2, "Bob", 30};
+  User user3 = {3, "Carol", 28};
+
+  page.insertRecord((char *)&user1, sizeof(user1));
+  page.insertRecord((char *)&user2, sizeof(user2));
+  page.insertRecord((char *)&user3, sizeof(user3));
+
+  // Delete the middle one
+  bool success = page.deleteRecord(1);
+
+  // What should be true after delete?
+  ASSERT_TRUE(success);
+  EXPECT_EQ(2, page.getNumberOfRecords());
+
+  // try to get the deleted record
+  char *deleted = page.getRecord(1);
+  EXPECT_EQ(nullptr, deleted);
+
+  // Can we still get the other records?
+  User *record0 = (User *)page.getRecord(0);
+  User *record2 = (User *)page.getRecord(2);
+  EXPECT_EQ(1, record0->id);
+  EXPECT_STREQ("Alice", record0->name);
+  EXPECT_EQ(25, record0->age);
+
+  EXPECT_EQ(3, record2->id);
+  EXPECT_STREQ("Carol", record2->name);
+  EXPECT_EQ(28, record2->age);
+}
+
+TEST_F(PageTest, DeleteAlreadyDeletedRecord) {
+  User user = {1, "Alice", 25};
+  page.insertRecord((char *)&user, sizeof(User));
+
+  // Delete once - should succeed
+  EXPECT_TRUE(page.deleteRecord(0));
+
+  // Delete again - should fail
+  EXPECT_FALSE(page.deleteRecord(0));
+}

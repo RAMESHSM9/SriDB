@@ -17,6 +17,7 @@ private:
   struct Slot {
     uint16_t offset; // start of the record
     uint16_t length; // record length
+    bool isDeleted;  // flag to indicate that this slot is deleted
   };
 
   char buffer[PAGE_SIZE];
@@ -39,6 +40,8 @@ public:
   char *getRecord(uint16_t slot_num);
 
   bool updateRecord(uint16_t slot_num, char *data, int length);
+
+  bool deleteRecord(uint16_t slot_num);
 
   bool writeToDisk(const char *fileName, uint32_t page_num);
 

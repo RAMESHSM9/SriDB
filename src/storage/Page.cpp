@@ -1,4 +1,5 @@
 #include "Page.hpp"
+#include <cstdint>
 #include <fstream>
 #include <ios>
 #include <iostream>
@@ -47,15 +48,53 @@ bool Page::insertRecord(const char *data, uint16_t length) {
 
 char *Page::getRecord(uint16_t slot_num) {
   PageHeader *header = getHeader();
+
   if (slot_num >= header->num_of_slots) {
     std::cout << "No record exist for the given slot";
     return nullptr;
   }
 
-  return (buffer + getSlot(slot_num)->offset);
+  Slot *slot = getSlot(slot_num);
+  if (slot->isDeleted) {
+    std::cout << "No record exist for the given slot";
+    return nullptr;
+  }
+
+  return (buffer + slot->offset);
 }
 
-uint16_t Page::getNumberOfRecords() { return getHeader()->num_of_slots; }
+bool Page::deleteRecord(uint16_t slot_num) {
+  PageHeader *header = getHeader();
+  if (slot_num >= header->num_of_slots) {
+    std::cout << "No record exist for the given slot";
+    return false;
+  }
+
+  Slot *slot = getSlot(slot_num);
+
+  // whether it already deleted
+  if (slot->isDeleted) {
+    std::cout << "No record exist for the given slot";
+    return false;
+  }
+
+  // mark the slot as deleted
+  //  dont touch the record (will be claimed as part of compaction)
+  slot->isDeleted = true;
+
+  return true;
+}
+
+uint16_t Page::getNumberOfRecords() {
+  int count = 0;
+  for (int i = 0; i < getHeader()->num_of_slots; i++) {
+    Slot *slot = getSlot(i);
+    if (!slot->isDeleted) {
+      count++;
+    }
+  }
+  return count;
+}
 
 void Page::printStats() {
   PageHeader *header = getHeader();
@@ -70,6 +109,7 @@ void Page::printStats() {
 
 bool Page::updateRecord(uint16_t slot_num, char *data, int length) {
   PageHeader *header = getHeader();
+
   if (slot_num >= header->num_of_slots) {
     std::cout << "Record does not exists" << std::endl;
     return false;
@@ -77,6 +117,12 @@ bool Page::updateRecord(uint16_t slot_num, char *data, int length) {
 
   // get slot
   Slot *slot = getSlot(slot_num);
+
+  // check whether the slot is deleted
+  if (slot->isDeleted) {
+    std::cout << "Record does not exists" << std::endl;
+    return false;
+  }
 
   if (slot->length < length) {
     std::cout << "Record failed to update because of size" << std::endl;
