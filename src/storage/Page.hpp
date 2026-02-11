@@ -46,4 +46,6 @@ public:
   bool writeToDisk(const char *fileName, uint32_t page_num);
 
   bool readFromDisk(const char *fileName, uint32_t page_num);
+
+  void compactPage();
 };

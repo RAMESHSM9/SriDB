@@ -1,8 +1,11 @@
 #include "Page.hpp"
+#include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <ios>
 #include <iostream>
+#include <vector>
 
 Page::Page() {
   memset(buffer, 0, PAGE_SIZE);
@@ -158,4 +161,51 @@ bool Page::readFromDisk(const char *fileName, uint32_t page_num) {
   file.seekg(page_num * PAGE_SIZE);
   file.read(buffer, PAGE_SIZE);
   return true;
+}
+
+void Page::compactPage() {
+  PageHeader *header = getHeader();
+
+  std::vector<std::pair<uint16_t, Slot *>> slotArray;
+
+  for (int i = 0; i < header->num_of_slots; i++) {
+    Slot *slot = getSlot(i);
+    slotArray.push_back(std::make_pair(slot->offset, slot));
+  }
+
+  // sort the slotArray (from highest to lowest)
+  std::sort(slotArray.begin(), slotArray.end(),
+            [](std::pair<uint16_t, Slot *> &A, std::pair<uint16_t, Slot *> &B) {
+              return (A.first > B.first);
+            });
+
+  int cummulative_gap = 0;
+  uint16_t lastOffset = PAGE_SIZE;
+  for (auto &slot : slotArray) {
+    if (slot.second->isDeleted) {
+      cummulative_gap += slot.second->length;
+    } else {
+      // slot which is not deleted
+      uint16_t newSlotOffset = slot.second->offset + cummulative_gap;
+      memmove(buffer + newSlotOffset, buffer + slot.second->offset,
+              slot.second->length);
+      slot.second->offset = newSlotOffset;
+      lastOffset = newSlotOffset;
+    }
+  }
+
+  // move slots
+  header->num_of_slots = 0;
+  for (auto slot : slotArray) {
+    if (!slot.second->isDeleted) {
+      Slot *newSlot = getSlot(header->num_of_slots);
+      *newSlot = *(slot.second);
+      header->num_of_slots++;
+    }
+  }
+
+  // update header
+  header->free_space_start =
+      sizeof(PageHeader) + (header->num_of_slots * sizeof(Slot));
+  header->free_space_end = lastOffset;
 }

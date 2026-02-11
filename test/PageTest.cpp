@@ -227,3 +227,42 @@ TEST_F(PageTest, DeleteAlreadyDeletedRecord) {
   // Delete again - should fail
   EXPECT_FALSE(page.deleteRecord(0));
 }
+
+TEST_F(PageTest, CompactPageBasic) {
+  User u1 = {1, "Alice", 25};
+  User u2 = {2, "Bob", 30};
+  User u3 = {3, "Carol", 28};
+
+  page.insertRecord((char *)&u1, sizeof(User));
+  page.insertRecord((char *)&u2, sizeof(User));
+  page.insertRecord((char *)&u3, sizeof(User));
+
+  std::cout << "Before delete:\n";
+  page.printStats();
+
+  // Delete middle record
+  page.deleteRecord(1);
+
+  std::cout << "\nAfter delete (before compact):\n";
+  page.printStats();
+
+  // Compact
+  page.compactPage();
+
+  std::cout << "\nAfter compact:\n";
+  page.printStats();
+
+  // Should have 2 records
+  EXPECT_EQ(page.getNumberOfRecords(), 2);
+
+  // Verify data integrity
+  User *r0 = (User *)page.getRecord(0);
+  User *r1 = (User *)page.getRecord(1);
+
+  ASSERT_NE(r0, nullptr);
+  ASSERT_NE(r1, nullptr);
+  EXPECT_EQ(r0->id, 1); // Alice
+  EXPECT_EQ(r1->id, 3); // Carol
+  EXPECT_STREQ(r0->name, "Alice");
+  EXPECT_STREQ(r1->name, "Carol");
+}
