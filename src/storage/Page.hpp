@@ -48,4 +48,12 @@ public:
   bool readFromDisk(const char *fileName, uint32_t page_num);
 
   void compactPage();
+
+  bool insertRecordSmart(char *data, uint16_t length);
+
+  uint16_t getContiguousFreeSpace();
+
+  uint16_t getTotalFreeSpace();
+
+  bool needsCompaction();
 };

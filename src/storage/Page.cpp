@@ -49,6 +49,21 @@ bool Page::insertRecord(const char *data, uint16_t length) {
   return true;
 }
 
+bool Page::insertRecordSmart(char *data, uint16_t length) {
+
+  if (insertRecord(data, length)) {
+    return true;
+  }
+
+  uint16_t totalFreeSpace = getTotalFreeSpace();
+  uint16_t neededSpace = length + sizeof(Slot);
+  if (neededSpace > totalFreeSpace)
+    return false;
+
+  compactPage();
+  return insertRecord(data, length);
+}
+
 char *Page::getRecord(uint16_t slot_num) {
   PageHeader *header = getHeader();
 
@@ -228,4 +243,39 @@ void Page::compactPage() {
   header->free_space_start =
       sizeof(PageHeader) + (header->num_of_slots * sizeof(Slot));
   header->free_space_end = lastOffset;
+}
+
+uint16_t Page::getContiguousFreeSpace() {
+  PageHeader *header = getHeader();
+  return (header->free_space_end - header->free_space_end);
+}
+
+uint16_t Page::getTotalFreeSpace() {
+  PageHeader *header = getHeader();
+  uint16_t total = (header->free_space_end - header->free_space_end);
+
+  for (uint16_t i = 0; i < header->num_of_slots; i++) {
+    Slot *slot = getSlot(i);
+    if (slot->isDeleted) {
+      total += slot->length;
+    }
+  }
+
+  return total;
+}
+
+bool Page::needsCompaction() {
+  PageHeader *header = getHeader();
+  if (header->num_of_slots == 0) {
+    return false;
+  }
+
+  uint16_t tombstone_count = 0;
+  for (uint16_t i = 0; i < header->num_of_slots; i++) {
+    if (getSlot(i)->isDeleted) {
+      tombstone_count++;
+    }
+  }
+  // Compact if >25% of slots are tombstones
+  return tombstone_count > (header->num_of_slots / 4);
 }

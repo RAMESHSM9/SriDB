@@ -357,3 +357,90 @@ TEST_F(PageTest, UpdateMultipleThenCompact) {
   EXPECT_STREQ(b->name, "Bob Baker");
   EXPECT_STREQ(c->name, "Carol Cooper");
 }
+
+TEST_F(PageTest, InsertSmartWithCompaction) {
+  // Insert 5 records
+  User users[5];
+  for (int i = 0; i < 5; i++) {
+    users[i] = {i, "User", 25};
+    page.insertRecord((char *)&users[i], sizeof(User));
+  }
+
+  std::cout << "After 5 inserts:\n";
+  page.printStats();
+
+  // Delete 3 of them (create tombstones)
+  page.deleteRecord(1);
+  page.deleteRecord(2);
+  page.deleteRecord(3);
+
+  std::cout << "\nAfter 3 deletes (tombstones created):\n";
+  page.printStats();
+  std::cout << "Contiguous free: " << page.getContiguousFreeSpace() << "\n";
+  std::cout << "Total free: " << page.getTotalFreeSpace() << "\n";
+
+  // Fill remaining contiguous space
+  User filler = {99, "Filler", 30};
+  while (page.insertRecord((char *)&filler, sizeof(User))) {
+    filler.id++;
+  }
+
+  std::cout << "\nAfter filling contiguous space:\n";
+  page.printStats();
+
+  // Normal insert should fail (no contiguous space)
+  User new_user = {100, "New", 40};
+  bool normal = page.insertRecord((char *)&new_user, sizeof(User));
+  EXPECT_FALSE(normal);
+
+  // Smart insert should succeed (compacts tombstones)
+  bool smart = page.insertRecordSmart((char *)&new_user, sizeof(User));
+  ASSERT_TRUE(smart);
+
+  std::cout << "\nAfter smart insert:\n";
+  page.printStats();
+
+  // Verify the record was inserted
+  // It should be at the last slot
+  uint16_t last_slot = page.getNumberOfRecords() - 1;
+  User *retrieved = (User *)page.getRecord(last_slot);
+  EXPECT_EQ(retrieved->id, 100);
+}
+
+TEST_F(PageTest, InsertSmartStillFails) {
+  // Fill page completely
+  User user = {1, "Test", 25};
+  while (page.insertRecordSmart((char *)&user, sizeof(User))) {
+    user.id++;
+  }
+
+  std::cout << "Page completely full:\n";
+  page.printStats();
+
+  // Even smart insert should fail now
+  bool success = page.insertRecordSmart((char *)&user, sizeof(User));
+  EXPECT_FALSE(success);
+}
+
+TEST_F(PageTest, NeedsCompactionCheck) {
+  // Insert 10 records
+  User user = {1, "Test", 25};
+  for (int i = 0; i < 10; i++) {
+    page.insertRecord((char *)&user, sizeof(User));
+    user.id++;
+  }
+
+  EXPECT_FALSE(page.needsCompaction());
+
+  // Delete 3 (30% tombstones) - should trigger threshold
+  page.deleteRecord(1);
+  page.deleteRecord(3);
+  page.deleteRecord(5);
+
+  EXPECT_TRUE(page.needsCompaction());
+
+  // Compact
+  page.compactPage();
+
+  EXPECT_FALSE(page.needsCompaction());
+}
