@@ -127,15 +127,35 @@ bool Page::updateRecord(uint16_t slot_num, char *data, int length) {
     return false;
   }
 
-  if (slot->length < length) {
-    std::cout << "Record failed to update because of size" << std::endl;
+  if (slot->length >= length) {
+    // overwrite raw bytes at the offset
+    memcpy(buffer + slot->offset, data, length);
+    return true;
+  }
+
+  // check for space
+  uint16_t new_free_space_start = header->free_space_end - length;
+  uint16_t new_slot_offset =
+      sizeof(PageHeader) + (header->num_of_slots + 1) * sizeof(Slot);
+
+  if (new_slot_offset >= new_free_space_start) {
     return false;
   }
 
-  // overwrite raw bytes at the offset
-  memcpy(buffer + slot->offset, data, length);
+  // get new slot, mark it as deleted and the compact
+  Slot *tombStoneSlot = getSlot(header->num_of_slots);
+  header->num_of_slots++;
+  *tombStoneSlot = *slot;
+  tombStoneSlot->isDeleted = true;
 
-  // no need to update slot/header, as its update operation
+  memcpy(buffer + new_free_space_start, data, length);
+
+  // update slot
+  slot->offset = new_free_space_start;
+  slot->length = length;
+
+  header->free_space_end = new_free_space_start;
+
   return true;
 }
 

@@ -88,20 +88,6 @@ TEST_F(PageTest, UpdateRecordSameSize) {
   EXPECT_EQ(retrieved->age, 26);
 }
 
-// Test: Update fails when new data is larger
-TEST_F(PageTest, UpdateRecordLargerSizeFails) {
-  User user = {1, "Alice", 25};
-  page.insertRecord((char *)&user, sizeof(User));
-
-  // Try to update with larger data
-  char large_data[200];
-  memset(large_data, 'X', 200);
-
-  bool success = page.updateRecord(0, large_data, 200);
-
-  EXPECT_FALSE(success); // Should fail
-}
-
 // Test: Write and read from disk
 TEST_F(PageTest, PersistenceToDisk) {
   User user1 = {1, "Alice", 25};
@@ -265,4 +251,109 @@ TEST_F(PageTest, CompactPageBasic) {
   EXPECT_EQ(r1->id, 3); // Carol
   EXPECT_STREQ(r0->name, "Alice");
   EXPECT_STREQ(r1->name, "Carol");
+}
+
+TEST_F(PageTest, UpdateRecordGrow) {
+  User u1 = {1, "Alice", 25};
+  User u2 = {2, "Bob", 30};
+  User u3 = {3, "Carol", 28};
+
+  page.insertRecord((char *)&u1, sizeof(User));
+  page.insertRecord((char *)&u2, sizeof(User));
+  page.insertRecord((char *)&u3, sizeof(User));
+
+  std::cout << "Before update:\n";
+  page.printStats();
+
+  // Make Bob's name longer (record grows)
+  strcpy(u2.name, "Robert Anderson McKenzie");
+  bool success = page.updateRecord(1, (char *)&u2, sizeof(User));
+
+  std::cout << "\nAfter update (before compaction):\n";
+  page.printStats();
+
+  ASSERT_TRUE(success);
+  EXPECT_EQ(page.getNumberOfRecords(), 3); // Still 3 active records
+
+  // Bob should still be at slot 1!
+  User *bob = (User *)page.getRecord(1);
+  ASSERT_NE(bob, nullptr);
+  EXPECT_EQ(bob->id, 2);
+  EXPECT_STREQ(bob->name, "Robert Anderson McKenzie");
+
+  // Other records still accessible
+  User *alice = (User *)page.getRecord(0);
+  User *carol = (User *)page.getRecord(2);
+  EXPECT_EQ(alice->id, 1);
+  EXPECT_EQ(carol->id, 3);
+
+  // Now compact to clean up tombstone
+  page.compactPage();
+
+  std::cout << "\nAfter compaction:\n";
+  page.printStats();
+
+  // Should still have 3 records, but more free space
+  EXPECT_EQ(page.getNumberOfRecords(), 3);
+}
+
+TEST_F(PageTest, UpdateRecordGrowNoSpace) {
+  // Insert small users
+  User user = {1, "Test", 25};
+  int count = 0;
+  while (page.insertRecord((char *)&user, sizeof(User))) {
+    count++;
+    user.id++;
+  }
+
+  std::cout << "Inserted " << count << " records\n";
+  page.printStats();
+
+  // Try to grow with a LARGER struct
+  struct LargeUser {
+    int id;
+    char name[200]; // Much bigger!
+    int age;
+  } large_user = {1, "Very Long Name", 25};
+
+  bool success = page.updateRecord(0, (char *)&large_user, sizeof(LargeUser));
+
+  EXPECT_FALSE(success); // Should fail - sizeof(LargeUser) > sizeof(User)
+}
+
+TEST_F(PageTest, UpdateMultipleThenCompact) {
+  User u1 = {1, "A", 25};
+  User u2 = {2, "B", 30};
+  User u3 = {3, "C", 28};
+
+  page.insertRecord((char *)&u1, sizeof(User));
+  page.insertRecord((char *)&u2, sizeof(User));
+  page.insertRecord((char *)&u3, sizeof(User));
+
+  // Update all three with longer names (creates 3 tombstones)
+  strcpy(u1.name, "Alice Anderson");
+  strcpy(u2.name, "Bob Baker");
+  strcpy(u3.name, "Carol Cooper");
+
+  page.updateRecord(0, (char *)&u1, sizeof(User));
+  page.updateRecord(1, (char *)&u2, sizeof(User));
+  page.updateRecord(2, (char *)&u3, sizeof(User));
+
+  std::cout << "After 3 updates (3 tombstones):\n";
+  page.printStats();
+
+  // Compact should clean up all 3 tombstones
+  page.compactPage();
+
+  std::cout << "\nAfter compaction:\n";
+  page.printStats();
+
+  // All data should still be intact
+  User *a = (User *)page.getRecord(0);
+  User *b = (User *)page.getRecord(1);
+  User *c = (User *)page.getRecord(2);
+
+  EXPECT_STREQ(a->name, "Alice Anderson");
+  EXPECT_STREQ(b->name, "Bob Baker");
+  EXPECT_STREQ(c->name, "Carol Cooper");
 }
