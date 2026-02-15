@@ -7,12 +7,15 @@
 #include <iostream>
 #include <vector>
 
-Page::Page() {
+Page::Page() { resetMemory(); }
+
+void Page::resetMemory() {
   memset(buffer, 0, PAGE_SIZE);
   PageHeader *header = getHeader();
   header->num_of_slots = 0;
   header->free_space_start = sizeof(PageHeader);
   header->free_space_end = PAGE_SIZE;
+  page_id = INVALID_PAGE_ID;
 }
 
 bool Page::insertRecord(const char *data, uint16_t length) {
@@ -174,7 +177,7 @@ bool Page::updateRecord(uint16_t slot_num, char *data, int length) {
   return true;
 }
 
-bool Page::writeToDisk(const char *fileName, uint32_t page_num) {
+bool Page::writePageToDisk(const char *fileName, uint32_t page_num) {
   std::ofstream file(fileName, std::ios::binary | std::ios::in | std::ios::out);
   if (!file) {
     // file does exists already
@@ -187,7 +190,7 @@ bool Page::writeToDisk(const char *fileName, uint32_t page_num) {
   return true;
 }
 
-bool Page::readFromDisk(const char *fileName, uint32_t page_num) {
+bool Page::readPageFromDisk(const char *fileName, uint32_t page_num) {
   std::ifstream file(fileName, std::ios::binary | std::ios::in);
   if (!file) {
     std::cout << "File Does not exists";

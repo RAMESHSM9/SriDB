@@ -98,11 +98,11 @@ TEST_F(PageTest, PersistenceToDisk) {
 
   // Write to disk
   const char *filename = "test_page.db";
-  ASSERT_TRUE(page.writeToDisk(filename, 0));
+  ASSERT_TRUE(page.writePageToDisk(filename, 0));
 
   // Create new page and read from disk
   Page page2;
-  ASSERT_TRUE(page2.readFromDisk(filename, 0));
+  ASSERT_TRUE(page2.readPageFromDisk(filename, 0));
 
   // Verify data persisted
   EXPECT_EQ(page2.getNumberOfRecords(), 2);

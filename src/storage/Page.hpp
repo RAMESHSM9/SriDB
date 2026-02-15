@@ -4,7 +4,8 @@
 #include <cstring>
 
 const int PAGE_SIZE = 4096; // 4KB Page size
-
+using page_id_t = uint16_t;
+static constexpr page_id_t INVALID_PAGE_ID = static_cast<page_id_t>(-1);
 // 4KB Page
 class Page {
 private:
@@ -28,6 +29,8 @@ private:
     return (Slot *)(buffer + sizeof(PageHeader) + slot_num * sizeof(Slot));
   }
 
+  page_id_t page_id = INVALID_PAGE_ID;
+
 public:
   Page();
 
@@ -43,9 +46,9 @@ public:
 
   bool deleteRecord(uint16_t slot_num);
 
-  bool writeToDisk(const char *fileName, uint32_t page_num);
+  bool writePageToDisk(const char *fileName, uint32_t page_num);
 
-  bool readFromDisk(const char *fileName, uint32_t page_num);
+  bool readPageFromDisk(const char *fileName, uint32_t page_num);
 
   void compactPage();
 
@@ -56,4 +59,15 @@ public:
   uint16_t getTotalFreeSpace();
 
   bool needsCompaction();
+
+  page_id_t getPageId() { return page_id; }
+
+  void setPageId(const page_id_t pageId) { page_id = pageId; }
+
+  // Add these for BufferPoolManager access
+  char *getData() { return buffer; }
+  const char *getData() const { return buffer; }
+
+  // Reset page to initial state (useful for newPage)
+  void resetMemory();
 };
